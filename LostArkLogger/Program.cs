@@ -23,7 +23,7 @@ namespace LostArkLogger
             Bluegrams.Application.PortableSettingsProvider.ApplyProvider(Properties.Settings.Default);
 
             if (!AdminRelauncher()) return;
-            VersionCompatibility();
+
             if (!IsConsole) Warning();
             AttemptFirewallPrompt();
             if (!IsConsole)
