@@ -41,15 +41,20 @@ namespace LostArkLogger.Utilities
             var log = id + "|" + DateTime.Now.ToUniversalTime().ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'") + "|" + String.Join("|", elements);
             var logHash = string.Concat(System.Security.Cryptography.MD5.Create().ComputeHash(Encoding.Unicode.GetBytes(log)).Select(x => x.ToString("x2")));
 
-            Task.Run(() =>
-            {
-                lock (LogFileLock)
+            try {
+                Task.Run(() =>
                 {
-                    File.AppendAllText(fileName, log + "|" + logHash + "\n");
-                }
+                    lock (LogFileLock)
+                    {
+                        File.AppendAllText(fileName, log + "|" + logHash + "\n");
+                    }
 
-                onLogAppend?.Invoke(log + "\n");
-            });
+                    onLogAppend?.Invoke(log + "\n");
+                });
+            } catch (Exception e){
+                Console.WriteLine("Error Appending to file");
+                Console.WriteLine(e.ToString());
+            }
         }
         public static void DoDebugLog(byte[] bytes)
         {
