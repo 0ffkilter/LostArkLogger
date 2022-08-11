@@ -25,6 +25,17 @@ namespace LostArkLogger.Utilities
         {
             if (!Directory.Exists(logsPath)) Directory.CreateDirectory(logsPath);
         }
+
+        public static void UpdateLogPath(string customLogPath = default)
+        {
+            if (!String.IsNullOrEmpty(customLogPath))
+            {
+                logsPath = customLogPath;
+            }
+
+            if (!Directory.Exists(logsPath)) Directory.CreateDirectory(logsPath);
+        }
+
         public static void StartNewLogFile()
         {
             fileName = logsPath + "\\LostArk_" + DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss") + ".log";
