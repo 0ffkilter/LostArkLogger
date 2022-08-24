@@ -119,10 +119,12 @@ namespace LostArkLogger
 
                         await this.http.SendAsync(request);
                     }
-                    catch
+                    catch (Exception e)
                     {
                         Console.WriteLine("Trying to requeue message");
+                        Console.WriteLine(DateTime.Now.ToString("h:mm:ss tt"));
                         this.messageQueue.Enqueue(sendMessage);
+                        Console.WriteLine(e);
                     }
 
                 }
