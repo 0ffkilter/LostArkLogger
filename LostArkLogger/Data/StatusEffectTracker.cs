@@ -70,19 +70,14 @@ namespace LostArkLogger
             // end this buf now, it got refreshed
             if (effectList.TryRemove(statusEffect.InstanceId, out var oldStatusEffect))
             {
-                Entity sourceEntity = parser.GetSourceEntity(sourceId);
                 if (effectData.Value == null) return;
-                var amount = (effectData.hasValue > 0 && effectData.Value.Length == 4) ? BitConverter.ToInt32(effectData.Value, 0) : 0;
-                var statusEffect = new StatusEffect { Started = DateTime.UtcNow, StatusEffectId = effectData.StatusEffectId, InstanceId = effectData.EffectInstanceId, SourceId = sourceEntity.EntityId, TargetId = targetId, Type = effectType, Value = amount };
                 // end this buf now, it got refreshed
-                if (effectList.TryRemove(statusEffect.InstanceId, out var oldStatusEffect))
-                {
                     var duration = DateTime.UtcNow - oldStatusEffect.Started;
                     OnStatusEffectEnded?.Invoke(oldStatusEffect, duration);
-                }
+               
                 effectList.TryAdd(statusEffect.InstanceId, statusEffect);
                 OnStatusEffectStarted(statusEffect);
-            } catch(Exception) { }
+            } 
         }
 
         public void Add(PKTStatusEffectAddNotify effect)

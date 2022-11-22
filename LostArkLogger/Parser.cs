@@ -87,6 +87,9 @@ namespace LostArkLogger
                 // Reset all state related to current packet processing here that won't be valid when creating a new listener.
                 fragmentedPacket = new Byte[0];
 
+
+
+
                     monitorType = Machina.Infrastructure.NetworkMonitorType.WinPCap;
                     string filter = "ip and tcp port 6040";
                     bool foundAdapter = false;
@@ -811,11 +814,7 @@ namespace LostArkLogger
                     else return;
                 }
                 Logger.DoDebugLog(bytes);
-                try {
-                    ProcessPacket(bytes.ToList());
-                } catch (Exception e) {
-                    // Console.WriteLine("Failure during processing of packet: " + e);
-                }
+                ProcessPacket(bytes.ToList());
             }
         }
         void Device_OnPacketArrival_pcap(object sender, PacketCapture evt)
@@ -846,11 +845,7 @@ namespace LostArkLogger
                         else return;
                     }
                     Logger.DoDebugLog(bytes);
-                    try {
-                        ProcessPacket(bytes.ToList());
-                    } catch (Exception e) {
-                        // Console.WriteLine("Failure during processing of packet: " + e);
-                    }
+                    ProcessPacket(bytes.ToList());
                 }
             }
         }
