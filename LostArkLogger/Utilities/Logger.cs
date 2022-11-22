@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -13,13 +12,14 @@ namespace LostArkLogger.Utilities
         static string logsPath = Path.Combine(documentsPath, "Lost Ark Logs");
 
         public static bool debugLog = false;
-
         static BinaryWriter logger;
         static FileStream logStream;
 
         private static readonly object LogFileLock = new object();
         private static readonly object DebugFileLock = new object();
+        private static readonly object packetDumpLock = new object();
         public static string fileName = logsPath + "\\LostArk_" + DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss") + ".log";
+        public static string fileNameLog = logsPath + "\\LALogs.log";
 
         static Logger()
         {
@@ -41,31 +41,34 @@ namespace LostArkLogger.Utilities
             fileName = logsPath + "\\LostArk_" + DateTime.Now.ToString("yyyy-MM-dd-HH-mm-ss") + ".log";
         }
         public static event Action<string> onLogAppend;
-        static bool InittedLog = false;
-        public static void AppendLog(int id, params string[] elements)
+        //static bool InittedLog = false;
+        public static void httpbridgeSender(int id, params string[] elements)
         {
-            if (InittedLog == false)
-            {
-                InittedLog = true;
-                AppendLog(253, System.Reflection.Assembly.GetEntryAssembly().GetName().Version.ToString());
-            }
+            //write logs for loa-details | only works on console-mode
             var log = id + "|" + DateTime.Now.ToUniversalTime().ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'") + "|" + String.Join("|", elements);
             var logHash = string.Concat(System.Security.Cryptography.MD5.Create().ComputeHash(Encoding.Unicode.GetBytes(log)).Select(x => x.ToString("x2")));
 
-            try {
-                Task.Run(() =>
+            Task.Run(() =>
+            {
+                onLogAppend?.Invoke(log + "\n");
+                lock (LogFileLock)
                 {
-                    lock (LogFileLock)
-                    {
-                        File.AppendAllText(fileName, log + "|" + logHash + "\n");
-                    }
-
-                    onLogAppend?.Invoke(log + "\n");
-                });
-            } catch (Exception e){
-                Console.WriteLine("Error Appending to file");
-                Console.WriteLine(e.ToString());
-            }
+                    File.AppendAllText(fileName, log + "|" + logHash + "\n");
+                }
+            });
+        }
+        public static void packetDumper(int opcode, byte[] bytes)
+        {
+            Task.Run(() =>
+            {
+                string s = "";
+                for (int i = 0; i < bytes.Length; i++) s += bytes[i].ToString("X2") +" ";
+                var log = DateTime.Now.ToUniversalTime().ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'") + "\n" + s + "\n";
+                lock (packetDumpLock)
+                {
+                    File.AppendAllText(logsPath + "\\"+opcode.ToString()+"_"+opcode.ToString("X")+".log", log);
+                }
+            });
         }
         public static void DoDebugLog(byte[] bytes)
         {
@@ -88,6 +91,19 @@ namespace LostArkLogger.Utilities
                     }
                 });
             }
+        }
+        public static void writeLogFile(int id, params string[] elements)
+        {
+            var log = id + "|" + DateTime.Now.ToUniversalTime().ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'fff'Z'") + "|" + String.Join("|", elements);
+            var logHash = string.Concat(System.Security.Cryptography.MD5.Create().ComputeHash(Encoding.Unicode.GetBytes(log)).Select(x => x.ToString("x2")));
+
+            Task.Run(() =>
+            {
+                lock (LogFileLock)
+                {
+                    File.AppendAllText(fileNameLog, log + "|" + logHash + "\n");
+                }
+            });
         }
     }
 }

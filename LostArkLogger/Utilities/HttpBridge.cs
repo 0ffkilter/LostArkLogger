@@ -17,13 +17,16 @@ namespace LostArkLogger
 
         public string[] args;
 
-        public void Start()
+        //todo : add loa detail compatibility
+
+        public void Start(string nicName)
         {
             EnqueueMessage(0, "Arguments: " + String.Join(",", args));
 
             // Configure the monitor with command-line arguments.
-            var RegionIndex = Array.IndexOf(args, "--Region");
-            var NpcapIndex = Array.IndexOf(args, "--UseNpcap");
+            //var RegionIndex = Array.IndexOf(args, "--Region");
+            //var NpcapIndex = Array.IndexOf(args, "--UseNpcap");
+            //-> not used, Npcap only
             var PortIndex = Array.IndexOf(args, "--Port");
             var CustomLogPathIndex = Array.IndexOf(args, "--CustomLogPath");
 
@@ -34,19 +37,6 @@ namespace LostArkLogger
 
             Properties.Settings.Default.Region = Region.Steam;
 
-            if (RegionIndex != -1)
-            {
-                if (args[RegionIndex + 1] == "Russia")
-                {
-                    //Properties.Settings.Default.Region = Region.Russia;
-                    EnqueueMessage(0, "Using Russia client!");
-                }
-                else if (args[RegionIndex + 1] == "Korea")
-                {
-                    Properties.Settings.Default.Region = Region.Korea;
-                    EnqueueMessage(0, "Using Korea client!");
-                }
-            }
 
             Properties.Settings.Default.Save();
 
@@ -62,20 +52,9 @@ namespace LostArkLogger
 
             var sniffer = new Parser();
 
-            if (NpcapIndex != -1)
-            {
-                sniffer.use_npcap = true;
-                sniffer.InstallListener();
-                if (!sniffer.use_npcap)
-                {
-                    EnqueueMessage(0, "Failed to initialize Npcap, using raw sockets instead. You can try to restart the app.");
-                }
-                else
-                {
-                    EnqueueMessage(0, "Using Npcap!");
-                }
-
-            }
+            sniffer.use_npcap = true;
+            sniffer.isConsoleMode = true;
+            sniffer.startParse(nicName);
 
             Logger.onLogAppend += (string log) =>
             {
@@ -106,9 +85,6 @@ namespace LostArkLogger
             {
                 if (this.messageQueue.TryDequeue(out var sendMessage))
                 {
-#if DEBUG
-                    Console.WriteLine("Sending: " + sendMessage);
-#endif
                     try
                     {
                         HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, "http://localhost:" + Port);
@@ -116,7 +92,6 @@ namespace LostArkLogger
                         var mediaTypeHeaderValue = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
                         mediaTypeHeaderValue.CharSet = "utf-8";
                         request.Content.Headers.ContentType = mediaTypeHeaderValue;
-
                         await this.http.SendAsync(request);
                     }
                     catch (Exception e)
@@ -126,7 +101,6 @@ namespace LostArkLogger
                         this.messageQueue.Enqueue(sendMessage);
                         Console.WriteLine(e);
                     }
-
                 }
                 else
                 {

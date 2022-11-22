@@ -1,41 +1,62 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
-using System.Diagnostics;
+using System.Windows.Forms;
 
 // https://stackoverflow.com/questions/10789898/determine-which-network-adapter-a-process-is-using
 namespace LostArkLogger.Utilities
 {
     class NetworkUtil
     {
-        public static NetworkInterface GetAdapterUsedByProcess(string pName)
+        public enum ReqType
         {
-            Process[] candidates = Process.GetProcessesByName(pName);
-            if (candidates.Length == 0)
-                throw new Exception("Cannot find any running processes with the name " + pName + ".exe");
-
-            IPAddress localAddr = null;
-            using (Process p = candidates[0])
+            NICName,
+            ProcessName
+        }
+        public static NetworkInterface GetAdapter(string name, ReqType type)
+        {
+            switch (type)
             {
-                TcpTable table = ManagedIpHelper.GetExtendedTcpTable(true);
-                foreach (TcpRow r in table)
-                    if (r.ProcessId == p.Id)
+                case ReqType.ProcessName:
+                    Process[] candidates = Process.GetProcessesByName(name);
+                    if (candidates.Length != 0)
                     {
-                        localAddr = r.LocalEndPoint.Address;
-                        break;
+                        IPAddress localAddr = null;
+                        using (Process p = candidates[0])
+                        {
+                            TcpTable table = ManagedIpHelper.GetExtendedTcpTable(true);
+                            foreach (TcpRow r in table)
+                                if (r.ProcessId == p.Id)
+                                {
+                                    localAddr = r.LocalEndPoint.Address;
+                                    break;
+                                }
+                        }
+
+                        if (localAddr != null)
+                        {
+                            foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+                            {
+                                IPInterfaceProperties ipProps = nic.GetIPProperties();
+                                if (ipProps.UnicastAddresses.Any(new Func<UnicastIPAddressInformation, bool>((u) => { return u.Address.ToString() == localAddr.ToString(); })))
+                                    return nic;
+                            }
+                        }
                     }
+                    break;
+                case ReqType.NICName:
+                    foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
+                    {
+                        if (nic.Name == name)
+                        {
+                            return nic;
+                        }
+                    }
+                    break;
             }
 
-            if (localAddr == null)
-                throw new Exception("No routing information for " + pName + ".exe found.");
-
-            foreach (NetworkInterface nic in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                IPInterfaceProperties ipProps = nic.GetIPProperties();
-                if (ipProps.UnicastAddresses.Any(new Func<UnicastIPAddressInformation, bool>((u) => { return u.Address.ToString() == localAddr.ToString(); })))
-                    return nic;
-            }
             return null;
         }
     }

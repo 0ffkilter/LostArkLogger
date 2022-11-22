@@ -23,21 +23,12 @@ namespace LostArkLogger
             Bluegrams.Application.PortableSettingsProvider.ApplyProvider(Properties.Settings.Default);
 
             if (!AdminRelauncher()) return;
-
             if (!IsConsole) Warning();
             AttemptFirewallPrompt();
-            if (!IsConsole)
-            {
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new MainWindow());
-            }
-            else
-            {
-                var httpBridge = new HttpBridge();
-                httpBridge.args = args;
-                httpBridge.Start();
-            }
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new MainWindow(args));
+
             if (File.Exists(Utilities.Logger.fileName) && Properties.Settings.Default.AutoUpload)
             {
                 var fileBytes = File.ReadAllBytes(Utilities.Logger.fileName);
@@ -54,28 +45,31 @@ namespace LostArkLogger
             t.Start();
             t.Stop();
         }
-        static void VersionCompatibility()
-        {
+        public static bool VersionCompatibility()
+        {//return true = first pc, false = second pc
+            bool lockEnabled = (Properties.Settings.Default.LockedNICname.Length != 0 && Properties.Settings.Default.LockedRegionName.Length != 0);
             (var region, var installedVersion) = VersionCheck.GetLostArkVersion();
             if (installedVersion == null)
             {
-                MessageBox.Show("Launch Lost Ark before launching logger", "Lost Ark Not Running", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-                Environment.Exit(0);
+                if (lockEnabled == false) MessageBox.Show("You must select the NIC yourself because Lost Ark is not running.", "Lost Ark Not Running", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+                return false;//second pc
             }
             else if (region == Region.Unknown)
-                MessageBox.Show("DPS Meter is out of date.\nDPS Meter might not work until updated.\nCheck Discord/Github for more info.\nFeel free to add a message in the discord informing shalzuth that it's out of data", "Out of date!", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            else if (Properties.Settings.Default.Region != region)
             {
-                Properties.Settings.Default.Region = region;
-                Properties.Settings.Default.Save();
+                MessageBox.Show("DPS Meter is out of date.\nDPS Meter might not work until updated.\nCheck Discord/Github for more info.\nFeel free to add a message in the discord informing shalzuth that it's out of data", "Out of date!", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return true;//first pc, out of date
             }
+            else if (region == Region.Steam || region == Region.Korea)
+            {
+                return true;//first pc, supported version
+            }
+            return false;//If all of the above conditions are not met, it is treated as a second pc
         }
         static void Warning()
         {
             if (Properties.Settings.Default.IgnoreWarning) return;
             if (AppDomain.CurrentDomain.FriendlyName.Contains("LostArk"))
             {
-                //var tempName = "LostArkDps" + Guid.NewGuid().ToString().Substring(0, 6) + ".exe";
                 var tempName = "DpsMeter.exe";
                 MessageBox.Show("LostArkLogger.exe is flagged.\nRenaming to " + tempName + " !", "Error!", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 File.Copy(AppDomain.CurrentDomain.FriendlyName, tempName);
@@ -109,7 +103,7 @@ namespace LostArkLogger
                     Verb = "runas"
                 };
                 try { Process.Start(startInfo); }
-                catch (Exception ex) { MessageBox.Show("This program must be run as an administrator!", "Error!", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+                catch (Exception) { MessageBox.Show("This program must be run as an administrator!", "Error!", MessageBoxButtons.OK, MessageBoxIcon.Error); }
                 return false;
             }
             return true;

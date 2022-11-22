@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using System.Threading.Tasks;
 
 namespace LostArkLogger
 {
@@ -31,8 +32,10 @@ namespace LostArkLogger
             Encounters,
             Player
         }
+
         Level level = Level.Damage;
         Scope scope = Scope.TopLevel;
+        public bool addBGColor = true;
 
         public Overlay()
         {
@@ -54,6 +57,13 @@ namespace LostArkLogger
             this.MouseDown += new System.Windows.Forms.MouseEventHandler(this.Overlay_MouseDown);
             this.ResumeLayout(false);
             SetStyle(ControlStyles.ResizeRedraw, true);
+            if (Properties.Settings.Default.Region == LostArkLogger.Region.Korea)
+            {
+                FormatNumber = FormatNumber_K;
+            } else
+            {
+                FormatNumber = FormatNumber_EN;
+            }
         }
         internal void AddSniffer(Parser s)
         {
@@ -65,6 +75,8 @@ namespace LostArkLogger
         Encounter encounter;
         Entity SubEntity;
         Font font = new Font("Helvetica", 10);
+        internal Func<UInt64, string> FormatNumber;
+
         void AddDamageEvent(LogInfo log)
         {
             if (sniffer.currentEncounter.Infos.Count > 0) encounter = sniffer.currentEncounter;
@@ -80,13 +92,24 @@ namespace LostArkLogger
         internal Parser sniffer;
         List<Brush> brushes = new List<Brush>();
         Brush black = new SolidBrush(Color.White);
+        Brush dark = new SolidBrush(Color.Black);
+        public Brush bgColor = new SolidBrush(Properties.Settings.Default.BackgroundColor);
+        Brush warn = new SolidBrush(Color.Red);
         void InitPens()
         {
             String[] colors = { "#3366cc", "#dc3912", "#ff9900", "#109618", "#990099", "#0099c6", "#dd4477", "#66aa00", "#b82e2e", "#316395", "#994499", "#22aa99", "#aaaa11", "#6633cc", "#e67300", "#8b0707", "#651067", "#329262", "#5574a6", "#3b3eac", "#b77322", "#16d620", "#b91383", "#f4359e", "#9c5935", "#a9c413", "#2a778d", "#668d1c", "#bea413", "#0c5922", "#743411" };
             foreach (var color in colors) brushes.Add(new SolidBrush(ColorTranslator.FromHtml(color)));
         }
         int barHeight = 20;
-        public static string FormatNumber(UInt64 n) // https://stackoverflow.com/questions/30180672/string-format-numbers-to-millions-thousands-with-rounding
+        public static string FormatNumber_K(UInt64 n)
+        {
+            if (n < 10000) { return n.ToString(); }
+            if (n < 100000000) return Math.Floor((double)(n / 10000)).ToString() + "만";
+            if (n < 1000000000000) return (Math.Floor((double)(n / 1000000)) / 100).ToString() + "억";//x.xx억
+            if (n >= 1000000000000) return (Math.Floor((double)(n / 100000000)) / 10000).ToString() + "조";//x.xxxx조
+            return n.ToString();
+        }
+        public static string FormatNumber_EN(UInt64 n) // https://stackoverflow.com/questions/30180672/string-format-numbers-to-millions-thousands-with-rounding
         {
             if (n < 1000) return n.ToString();
             if (n < 10000) return String.Format("{0:#,.##}K", n - 5);
@@ -97,6 +120,45 @@ namespace LostArkLogger
             if (n < 1000000000) return String.Format("{0:#,,.}M", n - 500000);
             return String.Format("{0:#,,,.##}B", n - 5000000);
         }
+
+        internal Func<UInt64[]> getHP;//parser->overlay
+        internal Func<UInt64> getElapsedTime;//parser->overlay
+        public string[] getCurrentInformation()
+        {
+            if (encounter == null) return null;
+            UInt64[] hpinfo = getHP();//cur, max
+            UInt64 totalDamage = 0;
+            UInt64 elapsedTime = getElapsedTime();
+            if (hpinfo[0] == 0 || hpinfo[1] == 0 ||
+                elapsedTime == 0) return null;
+            var rows = encounter.GetDamages(i => i.Damage, SubEntity);
+            var rKeys = rows.Keys.ToArray();
+            var eKeys = encounter.Entities.Keys.ToArray();
+            for (int i=0; i<eKeys.Count(); i++)
+            {
+                if (encounter.Entities[eKeys[i]].Type == Entity.EntityType.Player &&
+                    encounter.Entities[eKeys[i]].dead == false &&
+                    rKeys.Contains(encounter.Entities[eKeys[i]].VisibleName) == true)
+                {
+                    totalDamage += rows[encounter.Entities[eKeys[i]].VisibleName].Item1;
+                }
+            }
+            UInt64 tdps = totalDamage / elapsedTime;
+            if (tdps == 0) return null;
+            UInt64 t = (hpinfo[0] / tdps);
+            UInt64 t2 = t + elapsedTime;
+
+            string[] ss = new string[3];//HP, TOTAL DPS, EST.Time
+            ss[0] = "[ " + FormatNumber(hpinfo[0]) +"  /  " + FormatNumber(hpinfo[1]) +" HP ]";
+            ss[1] = (elapsedTime / 60).ToString("00") + ":" + (elapsedTime % 60).ToString("00") + " / " + (t2 / 60).ToString("00") + ":" + (t2 % 60).ToString("00") +"(Est. +"+(t/60).ToString("00")+":"+(t%60).ToString("00")+")";
+            ss[2] = "DPS " + FormatNumber(tdps);
+            return ss;
+        }
+        public void updateUI()
+        {
+            Invalidate();
+        }
+
         public Rectangle GetSpriteLocation(int i)
         {
             i--;
@@ -121,6 +183,7 @@ namespace LostArkLogger
                 int barWidth = (int)((rowData.Value.Item1 / elapsed) * Size.Width);
                 var nameOffset = 0;
                 var infoString = $"{rowData.Value.Item1}s {((rowData.Value.Item1 * 100) / elapsed):0.#}%";
+                if (addBGColor) e.Graphics.FillRectangle(bgColor, 0, (i + 1) * barHeight, Size.Width, barHeight);//add background
                 e.Graphics.FillRectangle(brushes[i % brushes.Count], 0, (i + 1) * barHeight, barWidth, barHeight);
                 if (rowData.Key.Contains('(') && scope == Scope.TopLevel)
                 {
@@ -150,8 +213,21 @@ namespace LostArkLogger
             }
             var titleBar = e.Graphics.MeasureString(title, font);
             var heightBuffer = (barHeight - titleBar.Height) / 2;
+            /*
+            if (level == Level.Damage && scope == Scope.TopLevel)
+            {
+                string[] s = getCurrentInformation();
+                if (s != null)
+                {
+                    e.Graphics.DrawString(s[0], font, black, 5, heightBuffer);
+                    e.Graphics.DrawString(s[1], font, black, (this.Width / 2) - ((e.Graphics.MeasureString(s[1], font).Width / 2)), heightBuffer);
+                    e.Graphics.DrawString(s[2], font, black, this.Width - e.Graphics.MeasureString(s[2], font).Width - 55, heightBuffer);
+                }
+            } else
+            {
+                
+            }*/
             e.Graphics.DrawString(title, font, black, 5, heightBuffer);
-
             ControlPaint.DrawFocusRectangle(e.Graphics, new Rectangle(Size.Width - 50, barHeight / 4, 10, barHeight / 2));
             e.Graphics.DrawLine(arrowPen, Size.Width - 30, barHeight / 2, Size.Width - 20, barHeight / 2);
             e.Graphics.DrawLine(arrowPen, Size.Width - 5, barHeight / 2, Size.Width - 15, barHeight / 2);
@@ -166,6 +242,7 @@ namespace LostArkLogger
             e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.SingleBitPerPixelGridFit;
             var heightBuffer = OnPaintDrawTitleBar(e);
 
+            if (encounter == null) return;
 
 
             if (scope == Scope.Encounters)
@@ -219,13 +296,13 @@ namespace LostArkLogger
                     var rowText = playerDmg.Key;
                     var barWidth = ((Single)playerDmg.Value.Item1 / maxDamage) * Size.Width;
                     //if (barWidth < .3f) continue;
+                    if (addBGColor) e.Graphics.FillRectangle(bgColor, 0, (i + 1) * barHeight, Size.Width, barHeight);//add background
                     e.Graphics.FillRectangle(brushes[i % brushes.Count], 0, (i + 1) * barHeight, barWidth, barHeight);
                     var dps = FormatNumber((ulong)(playerDmg.Value.Item1 / elapsed));
                     if (playerDmg.Value.Item4 > 0)
                     {
                         dps = FormatNumber((ulong)(playerDmg.Value.Item1 / playerDmg.Value.Item4));
                     }
-
 
                     var formattedDmg = FormatNumber(playerDmg.Value.Item1) + " (" + dps + ", " + (1f * playerDmg.Value.Item1 / totalDamage).ToString("P1") + ")";
                     if (level == Level.TimeAlive || level == Level.RaidTimeAlive)
